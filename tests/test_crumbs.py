@@ -19,10 +19,19 @@ def make_repo(root: Path) -> None:
         "import os\n\n"
         "def login(user, password):\n"
         '    """Authenticate a user."""\n'
-        "    return True\n\n"
+        "    # body is intentionally substantial so source clearly exceeds the map\n"
+        "    attempts = 0\n"
+        "    while attempts < 3:\n"
+        "        if password and user:\n"
+        "            token = os.urandom(16).hex()\n"
+        "            return token\n"
+        "        attempts += 1\n"
+        "    return None\n\n"
         "class TokenStore:\n"
         '    """Holds tokens."""\n'
-        "    def save(self, t): pass\n"
+        "    def save(self, t):\n"
+        "        self._tokens.append(t)\n"
+        "        return len(self._tokens)\n"
         "    def _private(self): pass\n"
     )
     (root / "src" / "api.ts").write_text(
@@ -52,6 +61,20 @@ class TestExtractors(unittest.TestCase):
         syms = extractors.extract("a.ts", "export function go(){}\nexport interface Cfg{}\n")
         names = {s["name"] for s in syms}
         self.assertEqual(names, {"go", "Cfg"})
+
+    @unittest.skipUnless(hasattr(__import__("ast"), "unparse"), "needs ast.unparse (3.9+)")
+    def test_python_type_signature(self):
+        src = "def f(a: int, b: str = 'x', *, c: bool = False) -> dict:\n    pass\n"
+        sym = extractors.extract("a.py", src)[0]
+        self.assertEqual(sym["sig"], "def f(a: int, b: str = 'x', *, c: bool = False) -> dict")
+
+    def test_symbol_line_numbers(self):
+        src = "import os\n\n\ndef first():\n    pass\n\n\ndef second():\n    pass\n"
+        syms = extractors.extract("a.py", src)
+        by_name = {s["name"]: s for s in syms}
+        self.assertEqual(by_name["first"]["line"], 4)
+        self.assertEqual(by_name["second"]["line"], 8)
+        self.assertGreaterEqual(by_name["first"]["end_line"], by_name["first"]["line"])
 
 
 class TestIndexAndQuery(unittest.TestCase):

@@ -3,14 +3,16 @@
 **Local, token-efficient cross-repo context for LLMs.**
 
 `crumbs` indexes your repositories into compact *context crumbs* — file maps and
-symbol signatures (function/class/type declarations + one-line docs), **never the
-full file bodies**. An assistant like Claude can then understand many repos at
-once by reading a tiny map instead of paying tokens to read the entire source
-tree.
+symbol signatures (typed function/class/type declarations + one-line docs + line
+ranges), **never the full file bodies**. An assistant like Claude can then
+understand many repos at once by reading a tiny map instead of paying tokens to
+read the entire source tree.
 
-Indexing this very tool produces a map of **~505 tokens** standing in for
-**~6,900 tokens** of source — a **93% reduction** — while still naming every
-file and symbol.
+Indexing this very tool produces a map of **~1,200 tokens** standing in for
+**~8,400 tokens** of source — an **~86% reduction** — while still naming every
+file and symbol. Each symbol carries its full type signature and a source line
+range (e.g. `def build_parser() -> ArgumentParser [L125-168]`), so the assistant
+can open *just that slice* of a file rather than the whole thing.
 
 - 🪶 **Zero dependencies.** Pure Python 3.8+ stdlib. Runs on any device.
 - 🔒 **Fully local.** Crumbs live in `~/.crumbs`. Nothing leaves your machine.
@@ -51,9 +53,13 @@ A repo can be referenced by name, id, or path.
 
 | | Full repo read | `crumbs map` |
 |---|---|---|
-| What | every byte of every file | file tree + signatures + 1-line docs |
+| What | every byte of every file | file tree + typed signatures + 1-line docs + line ranges |
 | Bodies | yes | no |
 | Cost | grows with codebase | grows with *interface* size |
+
+Because every symbol records its line range, the follow-up step is cheap too: the
+assistant reads `path:start-end` for the one function it needs instead of opening
+the entire file.
 
 Storage layout (`~/.crumbs`, override with `CRUMBS_HOME`):
 

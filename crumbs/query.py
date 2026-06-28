@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 
-from . import store
+from . import digest, store
 
 
 def _tokens(q: str) -> List[str]:
@@ -72,7 +72,9 @@ def context(query: str, repo: Optional[str] = None, limit: int = 20) -> str:
                 cur_path = it["path"]
                 lines.append(f"- `{it['path']}`")
             sig = it["sig"] or f"{it['kind']} {it['name']}"
+            tag = digest.loc(it)
+            where = f" [{tag}]" if tag else ""
             doc = f"  — {it['doc']}" if it.get("doc") else ""
-            lines.append(f"    - {sig}{doc}")
+            lines.append(f"    - {sig}{where}{doc}")
         lines.append("")
     return "\n".join(lines)

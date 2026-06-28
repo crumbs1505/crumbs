@@ -12,6 +12,15 @@ def _est_tokens(chars: int) -> int:
     return chars // 4
 
 
+def loc(sym: Dict[str, Any]) -> str:
+    """Compact source location tag, e.g. ``L40-92`` or ``L40``."""
+    start = sym.get("line")
+    if not start:
+        return ""
+    end = sym.get("end_line", start)
+    return f"L{start}" if end == start else f"L{start}-{end}"
+
+
 def repo_map(rid: str, max_symbols_per_file: int = 12) -> str:
     data = store.load_repo(rid)
     if not data:
@@ -44,8 +53,10 @@ def repo_map(rid: str, max_symbols_per_file: int = 12) -> str:
         lines.append(f"### {f['path']}")
         for sym in syms[:max_symbols_per_file]:
             sig = sym["sig"] or f"{sym['kind']} {sym['name']}"
+            tag = loc(sym)
+            where = f" [{tag}]" if tag else ""
             doc = f"  — {sym['doc']}" if sym.get("doc") else ""
-            lines.append(f"- {sig}{doc}")
+            lines.append(f"- {sig}{where}{doc}")
         if len(syms) > max_symbols_per_file:
             lines.append(f"- … +{len(syms) - max_symbols_per_file} more")
         lines.append("")

@@ -51,7 +51,12 @@ def _first_line(text: str) -> str:
 
 
 def extract(path: str, text: str) -> List[Dict[str, str]]:
-    """Return a list of symbols: {kind, name, sig, doc}."""
+    """Return a list of symbols.
+
+    Each symbol is ``{kind, name, sig, doc, line, end_line}`` where ``line`` /
+    ``end_line`` are 1-based source line numbers so a reader can open just the
+    symbol's slice (e.g. ``path:line-end_line``) instead of the whole file.
+    """
     lang = lang_for(path)
     if lang == "python":
         return _python(text)
@@ -71,6 +76,30 @@ def extract(path: str, text: str) -> List[Dict[str, str]]:
 # --------------------------------------------------------------------------- #
 # Python (AST-based, accurate)
 # --------------------------------------------------------------------------- #
+def _unparse(node) -> str:
+    """Best-effort source for an annotation/default node (3.9+ has ast.unparse)."""
+    if node is None:
+        return ""
+    if hasattr(ast, "unparse"):
+        try:
+            return ast.unparse(node)
+        except Exception:
+            return ""
+    return ""  # Python 3.8: omit annotation rather than guess
+
+
+def _arg(arg: ast.arg, default=None) -> str:
+    s = arg.arg
+    ann = _unparse(getattr(arg, "annotation", None))
+    if ann:
+        s += ": " + ann
+    if default is not None:
+        d = _unparse(default)
+        if d:
+            s += ("=" if not ann else " = ") + d
+    return s
+
+
 def _py_args(node: ast.AST) -> str:
     try:
         a = node.args  # type: ignore[attr-defined]
@@ -78,15 +107,25 @@ def _py_args(node: ast.AST) -> str:
         return "()"
     parts: List[str] = []
     pos = list(a.posonlyargs) + list(a.args)
-    for arg in pos:
-        parts.append(arg.arg)
+    # defaults align to the tail of the positional args.
+    pad = [None] * (len(pos) - len(a.defaults)) + list(a.defaults)
+    for arg, default in zip(pos, pad):
+        parts.append(_arg(arg, default))
+    if a.posonlyargs:
+        parts.insert(len(a.posonlyargs), "/")
     if a.vararg:
-        parts.append("*" + a.vararg.arg)
-    for arg in a.kwonlyargs:
-        parts.append(arg.arg)
+        parts.append("*" + _arg(a.vararg))
+    elif a.kwonlyargs:
+        parts.append("*")
+    for arg, default in zip(a.kwonlyargs, a.kw_defaults):
+        parts.append(_arg(arg, default))
     if a.kwarg:
-        parts.append("**" + a.kwarg.arg)
-    return "(" + ", ".join(parts) + ")"
+        parts.append("**" + _arg(a.kwarg))
+    sig = "(" + ", ".join(parts) + ")"
+    ret = _unparse(getattr(node, "returns", None))
+    if ret:
+        sig += " -> " + ret
+    return sig
 
 
 def _python(text: str) -> List[Dict[str, str]]:
@@ -103,6 +142,8 @@ def _python(text: str) -> List[Dict[str, str]]:
                 "name": node.name,
                 "sig": f"{prefix} {node.name}{_py_args(node)}",
                 "doc": _first_line(ast.get_docstring(node) or ""),
+                "line": node.lineno,
+                "end_line": getattr(node, "end_lineno", node.lineno),
             })
         elif isinstance(node, ast.ClassDef):
             bases = ", ".join(
@@ -118,7 +159,14 @@ def _python(text: str) -> List[Dict[str, str]]:
             doc = _first_line(ast.get_docstring(node) or "")
             if methods:
                 doc = (doc + " " if doc else "") + "methods: " + ", ".join(methods[:12])
-            out.append({"kind": "class", "name": node.name, "sig": sig, "doc": doc})
+            out.append({
+                "kind": "class",
+                "name": node.name,
+                "sig": sig,
+                "doc": doc,
+                "line": node.lineno,
+                "end_line": getattr(node, "end_lineno", node.lineno),
+            })
     return out
 
 
@@ -136,7 +184,11 @@ def _collect(text: str, patterns: List[tuple]) -> List[Dict[str, str]]:
             seen.add(name)
             sig = m.group(0).strip().rstrip("{(=").strip()
             sig = re.sub(r"\s+", " ", sig)[:120]
-            out.append({"kind": kind, "name": name, "sig": sig, "doc": ""})
+            line = text.count("\n", 0, m.start()) + 1
+            out.append({
+                "kind": kind, "name": name, "sig": sig, "doc": "",
+                "line": line, "end_line": line,
+            })
     return out
 
 
@@ -182,11 +234,14 @@ def _markdown(text: str) -> List[Dict[str, str]]:
     out: List[Dict[str, str]] = []
     for m in _HEADING.finditer(text):
         level = len(m.group(1))
+        line = text.count("\n", 0, m.start()) + 1
         out.append({
             "kind": f"h{level}",
             "name": m.group("name").strip(),
             "sig": "",
             "doc": "",
+            "line": line,
+            "end_line": line,
         })
     return out[:30]
 

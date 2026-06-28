@@ -87,7 +87,8 @@ def cmd_search(args: argparse.Namespace) -> int:
         return 0
     for h in hits:
         sig = h["sig"] or f"{h['kind']} {h['name']}"
-        print(f"{h['repo']}:{h['path']}  {sig}")
+        loc = f":{h['line']}" if h.get("line") else ""
+        print(f"{h['repo']}:{h['path']}{loc}  {sig}")
     return 0
 
 
