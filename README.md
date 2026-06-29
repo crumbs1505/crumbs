@@ -22,10 +22,15 @@ can open *just that slice* of a file rather than the whole thing.
 
 ## Install
 
+The distribution is named `crumbs-cli`; it provides the `crumbs` command.
+
 ```bash
-pip install -e .        # provides the `crumbs` command
-# or run without installing:
-python3 -m crumbs --help
+pipx install crumbs-cli       # isolated, on your PATH (recommended)
+# or, no install at all:
+uvx --from crumbs-cli crumbs --help
+# or, from a clone:
+pip install -e .              # dev install
+python3 -m crumbs --help      # run without installing
 ```
 
 ## Usage
@@ -41,6 +46,29 @@ crumbs remove my-web                       # drop a repo from the index
 ```
 
 A repo can be referenced by name, id, or path.
+
+## Use with Claude Code (MCP)
+
+crumbs ships an MCP server (`crumbs mcp`) so an MCP host — Claude Code, Claude
+Desktop, or any MCP client — can call it as native tools. It speaks the MCP wire
+protocol over stdio with **zero dependencies** (no SDK).
+
+Register it (e.g. in a project `.mcp.json` or your Claude Code config):
+
+```jsonc
+{
+  "mcpServers": {
+    "crumbs": { "command": "uvx", "args": ["--from", "crumbs-cli", "crumbs", "mcp"] }
+  }
+}
+```
+
+`uvx` fetches and runs crumbs on demand, so nothing needs to be installed first.
+(If you installed via `pipx`, use `"command": "crumbs", "args": ["mcp"]` instead.)
+
+The server exposes five model-controlled tools — `crumbs_map`, `crumbs_search`,
+`crumbs_context`, `crumbs_index`, `crumbs_list` — and auto-indexes a repo path on
+first use, so there is no manual setup step.
 
 ## Workflow with Claude
 

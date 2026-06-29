@@ -4,17 +4,34 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "crumbs-cli"
-version = "0.2.0"
-description = "Local, token-efficient cross-repo context for LLMs."
+version = "0.3.0"
+description = "Local, token-efficient cross-repo context for LLMs. CLI + MCP server."
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
 authors = [{ name = "crumbs" }]
-keywords = ["llm", "context", "claude", "code", "repo", "tokens"]
+keywords = ["llm", "context", "claude", "code", "repo", "tokens", "mcp"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Documentation",
+]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/crumbs1505/crumbs"
+Repository = "https://github.com/crumbs1505/crumbs"
+Issues = "https://github.com/crumbs1505/crumbs/issues"
 
 [project.scripts]
 crumbs = "crumbs.cli:main"
 
 [tool.setuptools]
 packages = ["crumbs"]
+license-files = ["LICENSE"]
