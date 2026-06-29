@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "crumbs": {
+      "command": "uvx",
+      "args": ["--from", "crumbs-cli", "crumbs", "mcp"]
+    }
+  }
+}

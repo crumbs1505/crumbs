@@ -53,7 +53,17 @@ crumbs ships an MCP server (`crumbs mcp`) so an MCP host — Claude Code, Claude
 Desktop, or any MCP client — can call it as native tools. It speaks the MCP wire
 protocol over stdio with **zero dependencies** (no SDK).
 
-Register it (e.g. in a project `.mcp.json` or your Claude Code config):
+**One-command install (Claude Code plugin):**
+
+```shell
+/plugin marketplace add crumbs1505/crumbs
+/plugin install crumbs@crumbs
+```
+
+This bundles the MCP server and a skill; repo paths are auto-indexed on first
+use. See [`plugin/`](plugin/) for details.
+
+**Manual registration** (e.g. in a project `.mcp.json` or your Claude Code config):
 
 ```jsonc
 {

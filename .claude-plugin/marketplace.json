@@ -1,0 +1,14 @@
+{
+  "name": "crumbs",
+  "description": "Token-efficient cross-repo context tools for LLMs.",
+  "owner": {
+    "name": "crumbs1505"
+  },
+  "plugins": [
+    {
+      "name": "crumbs",
+      "source": "./plugin",
+      "description": "Local, token-efficient cross-repo context for LLMs: compact repo maps (typed signatures + line ranges, never file bodies) exposed as MCP tools."
+    }
+  ]
+}
