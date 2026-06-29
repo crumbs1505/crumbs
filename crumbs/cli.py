@@ -108,6 +108,11 @@ def cmd_remove(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_mcp(args: argparse.Namespace) -> int:
+    from . import mcp
+    return mcp.serve()
+
+
 def cmd_refresh(args: argparse.Namespace) -> int:
     reg = store.load_registry()
     if not reg:
@@ -164,6 +169,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     prf = sub.add_parser("refresh", help="re-index all known repos")
     prf.set_defaults(func=cmd_refresh)
+
+    pmcp = sub.add_parser("mcp", help="run as an MCP server over stdio")
+    pmcp.set_defaults(func=cmd_mcp)
 
     return p
 

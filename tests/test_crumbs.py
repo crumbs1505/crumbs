@@ -9,7 +9,7 @@ from pathlib import Path
 _TMP = tempfile.mkdtemp(prefix="crumbs-test-")
 os.environ["CRUMBS_HOME"] = _TMP
 
-from crumbs import digest, extractors, indexer, query, store  # noqa: E402
+from crumbs import digest, extractors, indexer, mcp, query, store  # noqa: E402
 
 
 def make_repo(root: Path) -> None:
@@ -116,6 +116,45 @@ class TestIndexAndQuery(unittest.TestCase):
     def test_context_output(self):
         out = query.context("token")
         self.assertIn("demo", out)
+
+
+class TestMCP(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.repo = Path(tempfile.mkdtemp(prefix="mcp-repo-"))
+        make_repo(cls.repo)
+        indexer.index_repo(str(cls.repo), name="mcpdemo")
+
+    def test_initialize_handshake(self):
+        resp = mcp._handle({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                            "params": {"protocolVersion": "2025-06-18"}})
+        self.assertEqual(resp["id"], 1)
+        self.assertEqual(resp["result"]["serverInfo"]["name"], "crumbs")
+        self.assertIn("tools", resp["result"]["capabilities"])
+
+    def test_notification_returns_none(self):
+        self.assertIsNone(mcp._handle({"jsonrpc": "2.0", "method": "notifications/initialized"}))
+
+    def test_tools_list(self):
+        resp = mcp._handle({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+        names = {t["name"] for t in resp["result"]["tools"]}
+        self.assertIn("crumbs_map", names)
+        self.assertIn("crumbs_search", names)
+
+    def test_tools_call_search(self):
+        resp = mcp._handle({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                            "params": {"name": "crumbs_search", "arguments": {"query": "login"}}})
+        self.assertFalse(resp["result"]["isError"])
+        self.assertIn("login", resp["result"]["content"][0]["text"])
+
+    def test_unknown_tool_is_error(self):
+        resp = mcp._handle({"jsonrpc": "2.0", "id": 4, "method": "tools/call",
+                            "params": {"name": "nope", "arguments": {}}})
+        self.assertIn("error", resp)
+
+    def test_unknown_method(self):
+        resp = mcp._handle({"jsonrpc": "2.0", "id": 5, "method": "bogus/method"})
+        self.assertEqual(resp["error"]["code"], mcp.METHOD_NOT_FOUND)
 
 
 if __name__ == "__main__":
