@@ -6,4 +6,4 @@ crumbs to understand many repos at once without reading -- and paying tokens for
 -- the entire source tree.
 """
 
-__version__ = "0.3.2"
+__version__ = "0.4.0"

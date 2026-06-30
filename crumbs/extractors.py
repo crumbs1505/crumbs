@@ -53,9 +53,12 @@ def _first_line(text: str) -> str:
 def extract(path: str, text: str) -> List[Dict[str, str]]:
     """Return a list of symbols.
 
-    Each symbol is ``{kind, name, sig, doc, line, end_line}`` where ``line`` /
-    ``end_line`` are 1-based source line numbers so a reader can open just the
-    symbol's slice (e.g. ``path:line-end_line``) instead of the whole file.
+    Each symbol is ``{kind, name, sig, doc, line, end_line, vis}`` where ``line``
+    / ``end_line`` are 1-based source line numbers so a reader can open just the
+    symbol's slice (e.g. ``path:line-end_line``) instead of the whole file, and
+    ``vis`` is ``"public"`` or ``"internal"`` -- the per-language exported
+    surface (PEP-8 ``_``, JS ``export``, Go capitalization, Rust ``pub``) -- so
+    maps and search can lead with the API and demote internals.
     """
     lang = lang_for(path)
     if lang == "python":
@@ -144,6 +147,7 @@ def _python(text: str) -> List[Dict[str, str]]:
                 "doc": _first_line(ast.get_docstring(node) or ""),
                 "line": node.lineno,
                 "end_line": getattr(node, "end_lineno", node.lineno),
+                "vis": _py_vis(node.name),
             })
         elif isinstance(node, ast.ClassDef):
             bases = ", ".join(
@@ -166,14 +170,20 @@ def _python(text: str) -> List[Dict[str, str]]:
                 "doc": doc,
                 "line": node.lineno,
                 "end_line": getattr(node, "end_lineno", node.lineno),
+                "vis": _py_vis(node.name),
             })
     return out
+
+
+def _py_vis(name: str) -> str:
+    """PEP-8 convention: a leading underscore marks a name as internal."""
+    return "internal" if name.startswith("_") else "public"
 
 
 # --------------------------------------------------------------------------- #
 # Regex-based extractors for other languages
 # --------------------------------------------------------------------------- #
-def _collect(text: str, patterns: List[tuple]) -> List[Dict[str, str]]:
+def _collect(text: str, patterns: List[tuple], vis_of=None) -> List[Dict[str, str]]:
     out: List[Dict[str, str]] = []
     seen = set()
     for kind, rx in patterns:
@@ -188,6 +198,7 @@ def _collect(text: str, patterns: List[tuple]) -> List[Dict[str, str]]:
             out.append({
                 "kind": kind, "name": name, "sig": sig, "doc": "",
                 "line": line, "end_line": line,
+                "vis": vis_of(name, m) if vis_of else "public",
             })
     return out
 
@@ -215,16 +226,31 @@ _RUST = [
 ]
 
 
+def _vis_js(name: str, m) -> str:
+    """In JS/TS the exported surface is whatever carries an ``export`` keyword."""
+    return "public" if "export" in m.group(0) else "internal"
+
+
+def _vis_go(name: str, m) -> str:
+    """Go exports any identifier whose first letter is uppercase."""
+    return "public" if name[:1].isupper() else "internal"
+
+
+def _vis_rust(name: str, m) -> str:
+    """Rust items are private unless declared ``pub``."""
+    return "public" if re.match(r"\s*pub\b", m.group(0)) else "internal"
+
+
 def _js_ts(text: str) -> List[Dict[str, str]]:
-    return _collect(text, _JS_TS)
+    return _collect(text, _JS_TS, _vis_js)
 
 
 def _go(text: str) -> List[Dict[str, str]]:
-    return _collect(text, _GO)
+    return _collect(text, _GO, _vis_go)
 
 
 def _rust(text: str) -> List[Dict[str, str]]:
-    return _collect(text, _RUST)
+    return _collect(text, _RUST, _vis_rust)
 
 
 _HEADING = re.compile(r"^(#{1,3})\s+(?P<name>.+?)\s*#*$", re.M)
@@ -242,6 +268,7 @@ def _markdown(text: str) -> List[Dict[str, str]]:
             "doc": "",
             "line": line,
             "end_line": line,
+            "vis": "public",
         })
     return out[:30]
 

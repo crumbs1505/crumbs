@@ -102,7 +102,15 @@ def _tool_map(args: Dict[str, Any]) -> str:
     rid = _resolve_or_index(repo)
     if not rid:
         return f"No indexed repo matches '{repo}' (and it is not an indexable path)."
-    return digest.repo_map(rid, max_symbols_per_file=int(args.get("max_symbols", 12)))
+    max_symbols = int(args.get("max_symbols", 12))
+    path = args.get("path")
+    if path:
+        return digest.repo_map(rid, max_symbols_per_file=max_symbols, path=path)
+    if args.get("overview"):
+        return digest.repo_overview(rid)
+    if args.get("full"):
+        return digest.repo_map(rid, max_symbols_per_file=max_symbols)
+    return digest.auto_map(rid, max_symbols_per_file=max_symbols)
 
 
 def _tool_search(args: Dict[str, Any]) -> str:
@@ -142,12 +150,17 @@ TOOLS: Dict[str, Dict[str, Any]] = {
             "its typed function/class signatures, one-line docs, and source line "
             "ranges (e.g. [L40-92]) -- but NOT the file bodies. Use this FIRST to "
             "orient yourself in a repo instead of reading files; then open only the "
-            "line ranges it points to. Indexes the repo automatically if needed."
+            "line ranges it points to. For large repos this returns a directory "
+            "overview (each directory with its file/symbol counts) instead of every "
+            "symbol; pick a directory and call again with path=\"<dir>\" to expand "
+            "just that subtree. Indexes the repo automatically if needed."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "repo": _str("Repo name, id, or filesystem path."),
+                "path": _str("Optional: expand only this directory subtree, e.g. 'src/auth'."),
+                "overview": {"type": "boolean", "description": "Force a directory overview regardless of repo size."},
                 "max_symbols": {"type": "integer", "description": "Max symbols shown per file (default 12)."},
             },
             "required": ["repo"],
@@ -157,9 +170,12 @@ TOOLS: Dict[str, Dict[str, Any]] = {
     "crumbs_search": {
         "description": (
             "Search for symbols (functions, classes, types) by keyword across all "
-            "indexed repos, ranked by relevance. Returns repo:path:line plus the "
-            "signature for each hit, so you can open the exact slice. Use to find "
-            "where something lives across one or many repos."
+            "indexed repos, ranked by relevance (TF-IDF over the matched corpus, so "
+            "rare/specific terms rank higher). Matching splits camelCase/snake_case "
+            "and stems lightly, so 'login' finds loginUser and 'class' finds "
+            "parseClasses. Returns repo:path:line plus the signature for each hit, so "
+            "you can open the exact slice. Use to find where something lives across "
+            "one or many repos."
         ),
         "inputSchema": {
             "type": "object",

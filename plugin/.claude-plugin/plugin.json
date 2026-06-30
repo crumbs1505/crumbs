@@ -1,7 +1,7 @@
 {
   "name": "crumbs",
   "description": "Token-efficient cross-repo context. Compact repo maps (typed signatures + one-line docs + source line ranges, no file bodies) exposed as MCP tools, so Claude can orient in repos and find symbols for a fraction of the tokens.",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "author": {
     "name": "crumbs"
   },

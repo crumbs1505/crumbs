@@ -64,7 +64,14 @@ def cmd_map(args: argparse.Namespace) -> int:
     if not rid:
         print(f"error: no indexed repo matches '{args.repo}'", file=sys.stderr)
         return 1
-    text = digest.repo_map(rid, max_symbols_per_file=args.max_symbols)
+    if args.path:
+        text = digest.repo_map(rid, max_symbols_per_file=args.max_symbols, path=args.path)
+    elif args.overview:
+        text = digest.repo_overview(rid)
+    elif args.full:
+        text = digest.repo_map(rid, max_symbols_per_file=args.max_symbols)
+    else:
+        text = digest.auto_map(rid, max_symbols_per_file=args.max_symbols)
     print(text)
     if args.stats:
         data = store.load_repo(rid)
@@ -147,6 +154,9 @@ def build_parser() -> argparse.ArgumentParser:
     pm = sub.add_parser("map", help="print compact map of a repo")
     pm.add_argument("repo", help="repo name, id, or path")
     pm.add_argument("--max-symbols", type=int, default=12)
+    pm.add_argument("--path", help="expand only this directory subtree")
+    pm.add_argument("--overview", action="store_true", help="force directory overview")
+    pm.add_argument("--full", action="store_true", help="force complete map (no auto-overview)")
     pm.add_argument("--stats", action="store_true", help="print token estimate to stderr")
     pm.set_defaults(func=cmd_map)
 

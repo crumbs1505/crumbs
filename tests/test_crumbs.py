@@ -118,6 +118,138 @@ class TestIndexAndQuery(unittest.TestCase):
         self.assertIn("demo", out)
 
 
+class TestHierarchicalMap(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.repo = Path(tempfile.mkdtemp(prefix="hier-repo-"))
+        make_repo(cls.repo)
+        cls.data = indexer.index_repo(str(cls.repo), name="hier")
+        cls.rid = store.repo_id(str(cls.repo))
+
+    def test_overview_lists_directories_with_counts(self):
+        out = digest.repo_overview(self.rid)
+        self.assertIn("src/", out)
+        # Counts the two source files under src/, without dumping signatures.
+        self.assertIn("2 files", out)
+        self.assertNotIn("def login", out)
+
+    def test_path_filter_scopes_to_subtree(self):
+        out = digest.repo_map(self.rid, path="src")
+        self.assertIn("scope: src/", out)
+        self.assertIn("login", out)
+
+    def test_path_filter_unknown_dir_is_friendly(self):
+        out = digest.repo_map(self.rid, path="does/not/exist")
+        self.assertIn("no indexed files under", out)
+        self.assertNotIn("### ", out)
+
+    def test_small_repo_auto_maps_full(self):
+        # Under the threshold, the default view is the complete map.
+        out = digest.auto_map(self.rid)
+        self.assertIn("login", out)
+
+    def test_large_repo_defaults_to_overview(self):
+        big = Path(tempfile.mkdtemp(prefix="big-repo-"))
+        pkg = big / "pkg"
+        pkg.mkdir(parents=True)
+        for i in range(digest.OVERVIEW_THRESHOLD + 5):
+            (pkg / f"mod{i}.py").write_text(f"def fn{i}():\n    return {i}\n")
+        indexer.index_repo(str(big), name="big")
+        rid = store.repo_id(str(big))
+        auto = digest.auto_map(rid)
+        self.assertIn("pkg/", auto)
+        self.assertNotIn("def fn0", auto)  # overview omits signatures
+        # --full / full=True forces the complete map.
+        full = digest.repo_map(rid)
+        self.assertIn("fn0", full)
+        # The overview is strictly smaller than the full map.
+        self.assertLess(len(auto), len(full))
+
+
+class TestVisibility(unittest.TestCase):
+    """#5 -- symbols are tagged public/internal and maps lead with the API."""
+
+    def test_python_visibility(self):
+        syms = extractors.extract("a.py", "def pub():\n pass\ndef _hidden():\n pass\n")
+        vis = {s["name"]: s["vis"] for s in syms}
+        self.assertEqual(vis, {"pub": "public", "_hidden": "internal"})
+
+    def test_js_export_is_public(self):
+        syms = extractors.extract(
+            "a.ts", "export function shown(){}\nfunction hidden(){}\n"
+        )
+        vis = {s["name"]: s["vis"] for s in syms}
+        self.assertEqual(vis["shown"], "public")
+        self.assertEqual(vis["hidden"], "internal")
+
+    def test_go_capitalization(self):
+        syms = extractors.extract("a.go", "func Exported() {}\nfunc unexported() {}\n")
+        vis = {s["name"]: s["vis"] for s in syms}
+        self.assertEqual(vis["Exported"], "public")
+        self.assertEqual(vis["unexported"], "internal")
+
+    def test_rust_pub(self):
+        syms = extractors.extract("a.rs", "pub fn open() {}\nfn closed() {}\n")
+        vis = {s["name"]: s["vis"] for s in syms}
+        self.assertEqual(vis["open"], "public")
+        self.assertEqual(vis["closed"], "internal")
+
+    def test_map_leads_with_public_and_marks_internal(self):
+        repo = Path(tempfile.mkdtemp(prefix="vis-repo-"))
+        repo.mkdir(exist_ok=True)
+        (repo / "m.py").write_text(
+            "def _early_internal():\n pass\ndef late_public():\n pass\n"
+        )
+        indexer.index_repo(str(repo), name="vis")
+        rid = store.repo_id(str(repo))
+        out = digest.repo_map(rid)
+        # Public symbol is rendered before the internal one despite coming later
+        # in source, and the internal one carries a marker.
+        self.assertLess(out.index("late_public"), out.index("_early_internal"))
+        self.assertIn("·internal", out)
+
+
+class TestRetrieval(unittest.TestCase):
+    """#4 -- identifier splitting, stemming, and TF-IDF ranking."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.repo = Path(tempfile.mkdtemp(prefix="retr-repo-"))
+        (cls.repo / "src").mkdir(parents=True)
+        (cls.repo / "src" / "a.py").write_text(
+            "def loginUser(name):\n"
+            '    """Authenticate by name."""\n'
+            "    return name\n\n"
+            "def parseClasses(text):\n"
+            '    """Parse class definitions."""\n'
+            "    return text\n\n"
+            "def helper():\n"
+            '    """Common shared helper used everywhere."""\n'
+            "    return 1\n"
+        )
+        indexer.index_repo(str(cls.repo), name="retr")
+
+    def test_camelcase_subterm_match(self):
+        # "login" should find loginUser even though the token is camelCase.
+        names = [h["name"] for h in query.search("login", repo="retr")]
+        self.assertIn("loginUser", names)
+
+    def test_stemming_matches_inflection(self):
+        # "class" (singular) should find parseClasses ("Classes" plural).
+        names = [h["name"] for h in query.search("class", repo="retr")]
+        self.assertIn("parseClasses", names)
+
+    def test_exact_name_still_ranks_first(self):
+        hits = query.search("loginUser", repo="retr")
+        self.assertEqual(hits[0]["name"], "loginUser")
+
+    def test_tfidf_prefers_rare_terms(self):
+        # "parse" is specific to one symbol; it should outrank a query word that
+        # also appears but is diluted. parseClasses must top a "parse" search.
+        hits = query.search("parse", repo="retr")
+        self.assertEqual(hits[0]["name"], "parseClasses")
+
+
 class TestStaleness(unittest.TestCase):
     def setUp(self):
         self.repo = Path(tempfile.mkdtemp(prefix="stale-repo-"))
