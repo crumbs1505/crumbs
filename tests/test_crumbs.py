@@ -118,6 +118,35 @@ class TestIndexAndQuery(unittest.TestCase):
         self.assertIn("demo", out)
 
 
+class TestStaleness(unittest.TestCase):
+    def setUp(self):
+        self.repo = Path(tempfile.mkdtemp(prefix="stale-repo-"))
+        make_repo(self.repo)
+        self.data = indexer.index_repo(str(self.repo), name="stale")
+
+    def test_fresh_index_is_not_stale(self):
+        self.assertFalse(indexer.is_stale(self.data))
+
+    def test_new_file_marks_index_stale(self):
+        # Write a file whose mtime is newer than the recorded index time.
+        new_file = self.repo / "src" / "added.py"
+        new_file.write_text("def freshly_added():\n    return 1\n")
+        os.utime(new_file, (self.data["indexed_at"] + 10, self.data["indexed_at"] + 10))
+        self.assertTrue(indexer.is_stale(self.data))
+
+    def test_map_auto_reindexes_when_stale(self):
+        new_file = self.repo / "src" / "later.py"
+        new_file.write_text("def added_later():\n    return 2\n")
+        os.utime(new_file, (self.data["indexed_at"] + 10, self.data["indexed_at"] + 10))
+        # crumbs_map should detect staleness and pick up the new symbol.
+        out = mcp._tool_map({"repo": str(self.repo)})
+        self.assertIn("added_later", out)
+
+    def test_missing_path_is_not_stale(self):
+        ghost = dict(self.data, path="/nonexistent/path/xyz")
+        self.assertFalse(indexer.is_stale(ghost))
+
+
 class TestMCP(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

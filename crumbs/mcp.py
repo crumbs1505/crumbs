@@ -75,9 +75,20 @@ def _tool_list(args: Dict[str, Any]) -> str:
 
 
 def _resolve_or_index(selector: str) -> Optional[str]:
-    """Resolve a repo selector; if it's an unindexed path, index it first."""
+    """Resolve a repo selector, indexing (or re-indexing when stale) as needed.
+
+    An already-indexed repo is rebuilt if its source has changed since the last
+    index, so map/search/context never serve an out-of-date crumb map.
+    """
     rid = store.resolve(selector)
     if rid:
+        data = store.load_repo(rid)
+        if data and not indexer.is_stale(data):
+            return rid
+        try:
+            indexer.index_repo(data["path"] if data else selector)
+        except (NotADirectoryError, FileNotFoundError, KeyError):
+            pass  # keep the existing (possibly stale) index rather than failing
         return rid
     try:
         indexer.index_repo(selector)

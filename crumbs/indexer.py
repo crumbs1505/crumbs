@@ -54,6 +54,43 @@ def _git_info(root: Path) -> Dict[str, str]:
     return info
 
 
+def newest_mtime(root: Path) -> float:
+    """Most recent mtime among indexable files (cheap, stat-only walk).
+
+    Uses the same directory/file filters as :func:`index_repo` so the set of
+    files considered matches what would actually be indexed.
+    """
+    newest = 0.0
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".") or d in (".github",)]
+        for fn in filenames:
+            if fn in SKIP_FILES:
+                continue
+            try:
+                m = (Path(dirpath) / fn).stat().st_mtime
+            except OSError:
+                continue
+            if m > newest:
+                newest = m
+    return newest
+
+
+def is_stale(data: Dict[str, Any]) -> bool:
+    """True if the repo on disk has changed since it was last indexed.
+
+    Returns ``True`` for unreadable/missing metadata so callers re-index;
+    returns ``False`` if the path no longer exists (nothing to refresh from).
+    """
+    path = data.get("path")
+    indexed_at = data.get("indexed_at")
+    if not path or indexed_at is None:
+        return True
+    root = Path(path)
+    if not root.is_dir():
+        return False
+    return newest_mtime(root) > indexed_at
+
+
 def index_repo(path: str, name: Optional[str] = None) -> Dict[str, Any]:
     """Index a repository at ``path`` and persist its crumbs.
 
