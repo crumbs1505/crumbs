@@ -32,3 +32,15 @@ every file and symbol.
 3. For questions about **logic, correctness, or behavior**, you MUST read the
    real lines — crumbs gives names, shapes, and locations, not bodies. Treat it
    as an index that tells you *where* to look, not a substitute for the code.
+
+## Don't write a committed index file
+
+crumbs already *is* the index. Its map lives in crumbs' local store and is
+queried live (and auto-refreshes when the source changes) via the tools above.
+So when asked to "index" or "map" a repo, run the crumbs tools — **do NOT also
+write a committed `INDEX.md` (or similar) into the repo**. A hand-written index
+duplicates `crumbs_map`, goes stale the moment the code changes, and overlaps
+existing docs like `README.md` / `ARCHITECTURE.md` / `CLAUDE.md`. If the user
+genuinely wants written orientation, fold a couple of `crumbs_map` /
+`crumbs_search` pointers into an existing doc rather than adding a new file —
+and confirm first if the request is ambiguous.
