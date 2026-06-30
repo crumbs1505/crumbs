@@ -119,6 +119,25 @@ safely.
 python3 -m unittest discover -s tests -v
 ```
 
+## Releasing
+
+Releases are published to [PyPI](https://pypi.org/project/crumbs-cli/) automatically by
+CI ([`.github/workflows/publish.yml`](.github/workflows/publish.yml)) whenever a version
+tag is pushed. To cut a release:
+
+1. Bump the version in **all three** places: `pyproject.toml`, `crumbs/__init__.py`,
+   and `plugin/.claude-plugin/plugin.json` (keep them in sync).
+2. Commit the bump and push to `main`.
+3. Tag and push it:
+
+   ```bash
+   git tag v0.3.1 && git push origin v0.3.1
+   ```
+
+CI then builds the sdist + wheel, runs `twine check`, and publishes to PyPI via
+[Trusted Publishing](https://docs.pypi.org/trusted-publishers/) (OIDC — no token stored
+in the repo). PyPI versions are immutable, so every release needs a new version number.
+
 ## License
 
 MIT
