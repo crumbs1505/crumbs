@@ -1,11 +1,18 @@
-name: Publish to PyPI
+name: Publish
 
-# Publishes crumbs-cli to PyPI whenever a version tag (vX.Y.Z) is pushed.
-# Uses PyPI Trusted Publishing (OIDC) — no API token stored in GitHub.
+# On a pushed version tag (vX.Y.Z): build, publish to PyPI, and create a GitHub Release.
+# Via manual "Run workflow" (workflow_dispatch): build an existing tag and create/refresh
+# its GitHub Release only (no PyPI publish) — used to backfill releases for past tags.
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to create/refresh a GitHub Release for (e.g. v0.3.0)"
+        required: true
+        type: string
 
 jobs:
   build:
@@ -13,6 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # On dispatch, build the requested tag; on push, the tag ref is already checked out.
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -33,6 +43,8 @@ jobs:
     name: Publish to PyPI
     needs: build
     runs-on: ubuntu-latest
+    # Only publish to PyPI for real tag pushes, never for manual backfill runs.
+    if: github.event_name == 'push'
     environment: pypi
     permissions:
       id-token: write  # required for Trusted Publishing (OIDC)
@@ -45,3 +57,23 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # required to create releases
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Create / refresh GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          generate_release_notes: true  # auto-build notes from commits/PRs
+          files: dist/*
