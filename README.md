@@ -19,6 +19,12 @@ can open *just that slice* of a file rather than the whole thing.
 - 🧠 **Cross-repo.** Search and pull context across every repo you've indexed.
 - 🎯 **High signal.** Python is parsed via `ast`; JS/TS/Go/Rust/etc. via fast
   regex. Skips `node_modules`, `.git`, build dirs, lockfiles, and binaries.
+- 🗂️ **Progressive maps.** Large repos render as a directory overview first;
+  drill into a subtree with `--path` so you never load what you don't need.
+- 🔎 **Smart search.** Splits `camelCase`/`snake_case` and stems lightly, then
+  ranks with TF-IDF — `login` finds `loginUser`, and rare terms rank higher.
+- 🚪 **API-first.** Symbols are tagged public/internal (Python `_`, JS `export`,
+  Go capitalization, Rust `pub`); maps lead with the exported surface.
 
 ## Install
 
@@ -39,6 +45,8 @@ python3 -m crumbs --help      # run without installing
 crumbs index ~/code/my-api ~/code/my-web   # index one or more repos
 crumbs list                                # show indexed repos + stats
 crumbs map my-api --stats                  # compact map of one repo (+ token estimate)
+crumbs map my-api --path src/auth          # expand just one directory subtree
+crumbs map my-api --overview               # force the directory-level overview
 crumbs search "auth token"                 # rank matching symbols across all repos
 crumbs context "rate limiting" --repo my-api   # LLM-ready context slice
 crumbs refresh                             # re-index everything
@@ -46,6 +54,23 @@ crumbs remove my-web                       # drop a repo from the index
 ```
 
 A repo can be referenced by name, id, or path.
+
+### Progressive maps for large repos
+
+`crumbs map` adapts to repo size. A small repo prints in full; a large one
+(more than ~40 files) opens as a **directory overview** — each directory with its
+file and symbol counts but no signatures — so the map itself never becomes the
+token bloat it exists to eliminate. Pick a directory and expand only that one:
+
+```bash
+crumbs map my-api                  # overview for a large repo, full map for a small one
+crumbs map my-api --path src/auth  # drill into a subtree
+crumbs map my-api --full           # force the complete map regardless of size
+```
+
+Within each file, symbols are ordered **public API first**, with internals
+demoted and marked `·internal` — so the first tokens you read are the ones you're
+most likely to call, and the exported surface survives truncation.
 
 ## Use with Claude Code (MCP)
 
@@ -78,7 +103,10 @@ use. See [`plugin/`](plugin/) for details.
 
 The server exposes five model-controlled tools — `crumbs_map`, `crumbs_search`,
 `crumbs_context`, `crumbs_index`, `crumbs_list` — and auto-indexes a repo path on
-first use, so there is no manual setup step.
+first use, so there is no manual setup step. `crumbs_map` accepts a `path`
+argument to expand a single subtree (and returns a directory overview for large
+repos), and `crumbs_search` applies the same camelCase/snake_case splitting,
+stemming, and TF-IDF ranking as the CLI.
 
 ## Workflow with Claude
 
